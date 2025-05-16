@@ -1492,7 +1492,24 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   }
   #endif
   // Standard kernel launch
+  suEvent_t start;
+  suEvent_t stop;
+  CUCHECK(cuEventCreate(&start));
+  CUCHECK(cuEventCreate(&stop));
+  CUCHECK(cuEventRecord(start, launchStream))
   CUCHECK(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra));
+  CUCHECK(cuEventRecord(stop, launchStream));
+  CUCHECK(cuStreamSynchronize(launchStream));
+  float time_ms;
+  CUCHECK(cuEventElapsedTime(&time_ms, start, stop));
+  double time_s = time_ms / 1e3 / TEST_TIMES;
+  double gb = count * typeSize(dataType) / (double)1e9;
+  double bw = gb / time_s;
+  printf("TEST RES: count=%ld, dataType=%d, time=%f s, bw=%f GB/s\n",
+          count, dataType, time_s, bw);
+  CUCHECK(cuEventDestroy(start));
+  CUCHECK(cuEventDestroy(stop));
+
   //CUDACHECK(cudaLaunchKernel(fnAddr, grid, block, args, smem, launchStream));
   return ncclSuccess;
 }
@@ -1997,7 +2014,7 @@ static ncclResult_t hostToDevRedOp(
   uint64_t allBits = uint64_t(-1)>>(64-nbits);
   uint64_t signBit = allBits^(allBits>>1);
   bool datatype_signed = false;
-  
+
   switch (int(op)) {
   case ncclSum:  opFull->op = ncclDevSum;  break;
   case ncclProd: opFull->op = ncclDevProd; break;
