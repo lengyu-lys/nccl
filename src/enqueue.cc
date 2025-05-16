@@ -1492,23 +1492,25 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   }
   #endif
   // Standard kernel launch
-  suEvent_t start;
-  suEvent_t stop;
-  CUCHECK(cuEventCreate(&start));
-  CUCHECK(cuEventCreate(&stop));
-  CUCHECK(cuEventRecord(start, launchStream))
+  cudaEvent_t start;
+  cudaEvent_t stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start, launchStream);
   CUCHECK(cuLaunchKernel(fn, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, launchStream, nullptr, extra));
-  CUCHECK(cuEventRecord(stop, launchStream));
-  CUCHECK(cuStreamSynchronize(launchStream));
+  cudaEventRecord(stop, launchStream);
+  cudaStreamSynchronize(launchStream);
   float time_ms;
-  CUCHECK(cuEventElapsedTime(&time_ms, start, stop));
-  double time_s = time_ms / 1e3 / TEST_TIMES;
-  double gb = count * typeSize(dataType) / (double)1e9;
-  double bw = gb / time_s;
-  printf("TEST RES: count=%ld, dataType=%d, time=%f s, bw=%f GB/s\n",
-          count, dataType, time_s, bw);
-  CUCHECK(cuEventDestroy(start));
-  CUCHECK(cuEventDestroy(stop));
+  cudaEventElapsedTime(&time_ms, start, stop);
+  // double time_s = time_ms / 1e3 / TEST_TIMES;
+  // double gb = count * typeSize(dataType) / (double)1e9;
+  // double bw = gb / time_s;
+  // printf("TEST RES: count=%ld, dataType=%d, time=%f s, bw=%f GB/s\n",
+  //         count, dataType, time_s, bw);
+  printf("======== TEST RES: time=%f ms\n",
+          time_ms);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
 
   //CUDACHECK(cudaLaunchKernel(fnAddr, grid, block, args, smem, launchStream));
   return ncclSuccess;
