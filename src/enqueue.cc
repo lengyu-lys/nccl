@@ -20,6 +20,9 @@
 
 NCCL_PARAM(L1SharedMemoryCarveout, "L1_SHARED_MEMORY_CARVEOUT", 0);
 
+static int EXEC_COUNT = 0;
+static double TOTAL_MS = 0.0;
+
 // Returns maximum kernel stack size of all CUDA kernels
 ncclResult_t ncclInitKernelsForDevice(int cudaArch, size_t* maxStackSize) {
   ncclResult_t result = ncclSuccess;
@@ -1487,7 +1490,30 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
     launchConfig.hStream = launchStream;
 
     //CUDACHECK(cudaLaunchKernelExC(&launchConfig, fnAddr, args));
+  cudaEvent_t start;
+  cudaEvent_t stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start, launchStream);
     CUCHECK(cuLaunchKernelEx(&launchConfig, fn, nullptr, extra));
+  cudaEventRecord(stop, launchStream);
+  cudaStreamSynchronize(launchStream);
+  float time_ms;
+  cudaEventElapsedTime(&time_ms, start, stop);
+  // double time_s = time_ms / 1e3 / TEST_TIMES;
+  // double gb = count * typeSize(dataType) / (double)1e9;
+  // double bw = gb / time_s;
+  // printf("TEST RES: count=%ld, dataType=%d, time=%f s, bw=%f GB/s\n",
+  //         count, dataType, time_s, bw);
+  // printf("======== TEST RES: time=%f ms\n",
+  //         time_ms);
+  TRACE(NCCL_COLL, "======== TEST RES: exec: %d time=%f ms\n", EXEC_COUNT++, time_ms);
+  if (EXEC_COUNT > 9) {
+    TOTAL_MS += time_ms;
+   TRACE(NCCL_COLL, "======== TEST RES_AVG: exec: %d time=%f ms, avg_ms: %f\n", EXEC_COUNT, time_ms, TOTAL_MS / (EXEC_COUNT - 9));
+  }
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
     return ncclSuccess;
   }
   #endif
@@ -1507,8 +1533,9 @@ ncclResult_t ncclLaunchKernel(struct ncclComm* comm, struct ncclKernelPlan* plan
   // double bw = gb / time_s;
   // printf("TEST RES: count=%ld, dataType=%d, time=%f s, bw=%f GB/s\n",
   //         count, dataType, time_s, bw);
-  printf("======== TEST RES: time=%f ms\n",
-          time_ms);
+  // printf("======== TEST RES: time=%f ms\n",
+  //         time_ms);
+  TRACE(NCCL_COLL, "======== TEST RES: time=%f ms\n", time_ms);
   cudaEventDestroy(start);
   cudaEventDestroy(stop);
 
